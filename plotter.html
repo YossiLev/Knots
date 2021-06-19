@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        .but {
+            font-size: 20px;
+            font-family: Arial, serif;
+            padding: 4px 6px;
+            display: inline-block;
+            background-color: #328904;
+            border:1px solid black;
+            color: white;
+            font-weight: bold;
+            margin: 4px;
+            border-radius: 6px;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .menuBut {
+            font-size: 14px;
+            font-family: Arial, serif;
+            padding: 4px 6px;
+        }
+        .menuBut:hover {
+            background-color: lightgray;
+        }
+        .mode {
+            font-size: 20px;
+            font-family: Arial, serif;
+            padding: 8px 16px;
+            display: inline-block;
+            background-color: #6f716e;
+            border:1px solid black;
+            color: white;
+            font-weight: bold;
+            margin: -2px;
+            border-radius: 4px;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .modeSelect {
+            color: black;
+            background-color: antiquewhite;
+        }
+        .option {
+            background-color: #71706e;
+        }
+        .optionOn {
+            background-color: #7ce82e;
+        }
+        .miniKnot1 {
+            width: 150px;
+            height: 150px;
+            margin: 2px;
+            background-color: #ffffff;
+            display: inline-block;
+        }
+        .miniKnot {
+            margin: 3px;
+            background-color: antiquewhite;
+            padding: 10px
+        }
+        .smallCanvas {
+            border:1px solid red;
+        }
+        .cnStorage {
+            display: inline-block;
+            margin: 1px;
+        }
+        .enterNameFrame {
+            display: inline-block;
+            visibility: hidden;
+            border: 1px solid red;
+            padding: 4px;
+        }
+        .enterName {
+            width: 400px;
+            border: 1px solid blue;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+        }
+        .dname {
+            font-family: Arial, sans-serif;
+            color: rgba(101, 100, 100, 0.95);
+        }
+        .contextMenu {
+            position: fixed;
+            top: 100px;
+            left: 100px;
+            background-color: #eaeaea;
+            visibility: hidden;
+            z-index: 100;
+            padding: 10px;
+            border-radius: 3px;
+            box-shadow: 2px 2px 7px grey;
+            border: 1px solid lightgray;
+        }
+        .menuSeparator {
+            background-color: darkgray;
+            height: 1px;
+            margin: 5px;
+        }
+    </style>
+    <script>
+        class Polynomial {
+            constructor(dim) {
+                this.positive = Array.from({length: dim}).map(() => 0);
+                this.negative = Array.from({length: dim}).map(() => 0);
+            }
+            toString(label = "q") {
+                const pos = this.positive.map((p, ip) =>
+                    (p !== 0 ? p !== 1 ? `${p} ${label}^${ip}` : `${label}^${ip}` : ''))
+                    .filter(s => s.length > 0).reverse();
+                const neg = this.negative.map((p, ip) =>
+                    (p !== 0 ? p !== 1 ? `${p} ${label}^-${ip}` : `${label}^-${ip}` : ''))
+                    .filter(s => s.length > 0);
+                return pos.concat(neg).join(' + ').replaceAll('+ -', '- ');
+            }
+            copy() {
+                const l = this.positive.length;
+                let cp = new Polynomial(l);
+                for (let i = 0; i < l; i++) {
+                    cp.positive[i] = this.positive[i];
+                    cp.negative[i] = this.negative[i];
+                }
+                return cp;
+            }
+            static toHtml1pos(c, p, label) {
+                if (c === 0) return '';
+                if (c === 1) return `${label}<sup>${p}</sup>`;
+                if (c === -1) return `- ${label}<sup>${p}</sup>`;
+                return `${c}${label}<sup>${p}</sup>`;
+            }
+            static toHtml1Neg(c, p, label) {
+                if (c === 0) return '';
+                if (c === 1) return `${label}<sup>-${p}</sup>`;
+                if (c === -1) return `- ${label}<sup>-${p}</sup>`;
+                return `${c}${label}<sup>-${p}</sup>`;
+            }
+            toHtml(label = "q") {
+                const pos = this.positive.map((p, ip) => Polynomial.toHtml1pos(p, ip, label))
+                    .filter(s => s.length > 0).reverse();
+                const neg = this.negative.map((p, ip) => Polynomial.toHtml1Neg(p, ip, label))
+                    .filter(s => s.length > 0);
+                return pos.concat(neg).join(' + ').replaceAll('+ -', '- ');
+            }
+            add(other, factor = 1) {
+                this.positive.forEach((xpp, i) => {
+                    this.positive[i] += factor * other.positive[i];
+                    this.negative[i] += factor * other.negative[i];
+                });
+                return this;
+            }
+            divide(other) {
+                let num = this.copy().shift(50);
+                let den = other.copy().shift(20);
+                let res = new Polynomial(100);
+                let topDen = den.highest();
+
+                while (num.highest() >= topDen) {
+                    let topNum = num.highest();
+                    let div = num.positive[topNum] / den.positive[topDen];
+                    res.positive[topNum - topDen] += div;
+                    num.positive[topNum] = 0;
+                    for (let i = topDen - 1; i >= 0; i--) {
+                        if (Math.abs(den.positive[i]) > 0.000001) {
+                            num.positive[i + topNum - topDen] -= div * den.positive[i];
+                        }
+                    }
+                }
+                if (num.highest() >= 0) {
+                    console.log('ERROR in div')
+                }
+                return res.shift(- 30);
+            }
+            highest() {
+                for (let i = this.positive.length - 1; i >= 0; i--) {
+                    if (Math.abs(this.positive[i]) > 0.000001) {
+                        return i;
+                    }
+                }
+                return - 1;
+            }
+            jNorm() {
+                return this.copy().divide(Polynomial.buildPower(1));
+            }
+            shift(amount) {
+                let i;
+                let l = this.positive.length;
+                if (amount > 0) {
+                    for (i = l - 1; i >= amount; i--) {
+                        this.positive[i] = this.positive[i - amount];
+                    }
+                    for (i = amount - 1; i >= 0; i--) {
+                        this.positive[i] = this.negative[amount - i];
+                    }
+                    for (i = 1; i < l - amount; i++) {
+                        this.negative[i] = this.negative[amount + i];
+                    }
+                }
+                if (amount < 0) {
+                    for (i = l - 1; i > - amount; i--) {
+                        this.negative[i] = this.negative[i + amount];
+                    }
+                    for (i = - amount; i > 0; i--) {
+                        this.negative[i] = this.positive[- amount - i];
+                    }
+                    for (i = 0; i < l + amount; i++) {
+                        this.positive[i] = this.positive[- amount + i];
+                    }
+                }
+                return this;
+            }
+            shrink() {
+                let l = this.positive.length;
+                for (let i = 1; i < l; i++) {
+                    if (i * 2 < l) {
+                        this.positive[i] = this.positive[i * 2];
+                        this.negative[i] = this.negative[i * 2];
+                    } else {
+                        this.positive[i] = 0;
+                        this.negative[i] = 0;
+                    }
+                }
+                return this;
+            }
+            static buildPower(p) {
+                let g = new Polynomial(100);
+                let n = 1;
+                let d = 1;
+                let v = [];
+
+                for (let i = 1; i <= p / 2 + 1; i++) {
+                    v.push(n / d);
+                    d *= i;
+                    n *= p  + 1 - i;
+                }
+                let s = p % 2;
+                v.forEach((x, ix) => {
+                    let power = s + 2 * (Math.floor(p / 2) - ix);
+                    g.positive[power] = x;
+                    g.negative[power] = x;
+                });
+                g.negative[0] = 0;
+                return g;
+            }
+
+        }
+
+        let options = new Map();
+        let gblTrans = {sx : 0, sy: 0, z: 1.0, w: 1000, h: 500 }
+
+        const rad = 10;
+        const rad2 = rad * rad;
+
+        function nextCombo(combo, k, n) {
+            let c = k - 1;
+            while (c >= 0) {
+                if (combo[c] < n - (k - c)) {
+                    combo[c]++;
+                    while (true) {
+                        c++;
+                        if (c >= k) {
+                            return true;
+                        }
+                        combo[c] = combo[c - 1] + 1;
+                    }
+                } else {
+                    c = c - 1;
+                }
+            }
+
+        }
+
+        function tPoint (p, t) {
+            return [(p[0] - t.w / 2) * t.z + t.w / 2 + t.sx, (p[1] - t.h / 2) * t.z + t.h / 2 + t.sy];
+        }
+        function tPointInv (p, t) {
+            return [(p[0] - t.w / 2) / t.z + t.w / 2 - t.sx, (p[1] - t.h / 2) / t.z + t.h / 2 - t.sy];
+        }
+        function butOpt(o) {
+            let val = options.get(`opt${o}`);
+            return !(!val || val === 'false');
+        }
+        function sumSqr(x, y) {
+            return x * x + y * y;
+        }
+
+        function toggleOption(event) {
+            const id = event.target.id;
+            let val = options.get(id);
+            if (!val || val === 'false') {
+                options.set(id, 'true');
+                event.target.classList.add('optionOn');
+            } else {
+                event.target.classList.remove('optionOn');
+                options.set(id, 'false');
+            }
+            refreshMain();
+        }
+
+        function typeByOpt (type, opt) {
+            return (opt.typeOverride && (type === 1 || type === 2))
+                ? (opt.typeOverride === 'A' ? (type + 2) : opt.typeOverride === 'B' ? (3 - type + 2) : 0)
+                : type;
+        }
+        function linesByType(type) {
+            return [
+                [[0, 1], [2, 3]],
+                [[0, 1], [2, 3]], // positive crossing
+                [[2, 3], [0, 1]], // negative crossing
+                [[0, 3], [1, 2]], // "A0" on positive "B1" on negative
+                [[0, 2], [1, 3]]  // "B1" on positive "A0" on negative
+            ][type];
+        }
+        function nearInLine(lines, item) {
+            const ln = lines.find(l => l[0] === item || l[1] === item);
+            return ln[0] === item ? ln[1] : ln[0];
+        }
+        class Crossing {
+            constructor(x, y, type = 0) {
+                this.type = type;
+                this.x = x;
+                this.y = y;
+            }
+            copy() {
+                return new Crossing(this.x, this.y, this.type);
+            }
+            serialize() {
+                return `${this.type},${this.x},${this.y}`;
+            }
+            static deserialize(s) {
+                let [type, x, y] = s.split(',').map(parseFloat);
+                return new Crossing(x, y, type);
+            }
+            getCross(p1, p2, c = 10) {
+                let d1 = this.isInside(p1[0], p1[1]);
+                let pm = [0.5 * (p1[0] + p2[0]), 0.5 * (p1[1] + p2[1])];
+                let dm = this.isInside(pm[0], pm[1]);
+                if (c < 0) {
+                    return pm;
+                }
+                if (dm === d1) {
+                    return this.getCross(pm, p2, c - 1);
+                }
+                return this.getCross(pm, p1, c - 1);
+            }
+            finalize(ps) {
+                let stateIn = false;
+                this.pc = []
+                this.pNear = []
+                ps.forEach((p, ip) => {
+                    if (ip > 0 && (!stateIn) === (sumSqr(p[0] - this.x, p[1] - this.y) < rad2)) {
+                        stateIn = !stateIn;
+                        this.pc.push([...this.getCross(ps[ip - 1], p), ip - (stateIn ? 0: 1)]);
+                        this.pNear.push([-1, -1, -1]);
+                    }
+                });
+                if (this.pc.length === 4) {
+                    const z = (this.pc[1][0] - this.pc[0][0]) * (this.pc[3][1] - this.pc[2][1]) -
+                        (this.pc[1][1] - this.pc[0][1]) * (this.pc[3][0] - this.pc[2][0]);
+                    if (z < 0) {
+                        // switching if needed to make the first pair
+                        this.pc = [this.pc[2], this.pc[3], this.pc[0], this.pc[1]];
+                    }
+                }
+            }
+            drawLine(ctx, i1, i2, tr) {
+                ctx.beginPath();
+                ctx.moveTo(...tPoint(this.pc[i1], tr));
+                ctx.lineTo(...tPoint(this.pc[i2], tr));
+                ctx.stroke();
+            }
+            drawStyleLine(ctx, i1, i2, tr, width, color) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                this.drawLine(ctx, i1, i2, tr)
+            }
+
+            drawCrossing(ctx, ps, tr, opt) {
+                const type = typeByOpt(this.type, opt);
+                const lines = linesByType(type);
+                const colorCross = ["black", "red", "blue", "brown", "green"][type];
+                const wide = type === 1 || type === 2;
+
+                ctx.fillStyle = type === 0 ? 'yellow' : 'white';
+                ctx.beginPath();
+                ctx.arc(...tPoint([this.x, this.y], tr), rad * tr.z, 0, 2 * Math.PI);
+                ctx.fill();
+                if (!butOpt('HideCircles')) {
+                    ctx.stroke();
+                }
+
+                if (this.pc?.length === 4) {
+                    this.drawStyleLine(ctx, lines[0][0], lines[0][1], tr, 1, 'black');
+                    if (wide) {
+                        this.drawStyleLine(ctx, lines[1][0], lines[1][1], tr, 7, 'white');
+                    }
+                    this.drawStyleLine(ctx, lines[1][0], lines[1][1], tr, 1, 'black');
+
+                    if (!butOpt('HideCircles')) {
+                        ctx.strokeStyle = colorCross;
+                        ctx.beginPath();
+                        ctx.arc(...tPoint([this.x, this.y], tr), rad * tr.z, 0, 2 * Math.PI);
+                        ctx.stroke();
+                    }
+                }
+            }
+            isInside(x, y, factor = 1) {
+                return sumSqr(this.x - x, this.y - y) < (rad2 * factor);
+            }
+            action(x, y) {
+                if (this.isInside(x, y, 4.0)) {
+                    switch (mode) {
+                        case 2: // crossing
+                            this.type = this.type === 1 ? 2 : 1;
+                            break;
+                        case 3: // divide
+                            this.type = this.type === 3 ? 4 : 3;
+                            break;
+                    }
+                }
+
+            }
+            invert() {
+                this.type = this.type === 1 ? 2 : 1;
+            }
+
+        }
+
+        class Knot {
+            constructor(name = 'local') {
+                this.name = name;
+                this.clear();
+            }
+
+            clear() {
+                this.points = [];
+                this.crossings = [];
+                this.minX = 0;
+                this.maxX = 0;
+                this.minY = 0;
+                this.maxY = 0;
+                this.nLoops = 0;
+                this.nPositiveCross = 0;
+                this.conFocus = - 1;
+            }
+            copy() {
+                let newKnot = new Knot();
+                newKnot.name = this.name;
+                newKnot.points = this.points.map(p => [p[0], p[1]]);
+                newKnot.crossings = this.crossings.map(c => c.copy());
+                newKnot.minX = this.minX;
+                newKnot.maxX = this.maxX;
+                newKnot.minY = this.minY;
+                newKnot.maxY = this.maxY;
+                newKnot.nLoops = this.nLoops;
+                newKnot.nPositiveCross = this.nPositiveCross;
+
+                return newKnot;
+            }
+            serialize(name = '') {
+                if (name.length <= 0) {
+                    name = this.name;
+                }
+                let pointsStr = this.points.map(p => `${p[0]},${p[1]}`).join(':');
+                let crossStr = this.crossings.map(c => c.serialize()).join(':');
+                return `${name}#${pointsStr}#${crossStr}`;
+            }
+            static deserialize(s) {
+                let [name, pointsStr, crossStr] = s.split('#');
+                let knot = new Knot(name);
+                knot.points = pointsStr.split(':').map(s => s.split(',').map(parseFloat));
+                knot.crossings = crossStr.split(':').map(s => Crossing.deserialize(s));
+                knot.makeConnect();
+                return knot;
+            }
+            addPointActual(x, y) {
+                this.points.push([x, y]);
+                if (this.points.length === 1) {
+                    this.minX = x;
+                    this.maxX = x;
+                    this.minY = y
+                    this.maxY = y;
+                } else {
+                    if (this.minX > x) {
+                        this.minX = x;
+                    }
+                    if (this.maxX < x) {
+                        this.maxX = x;
+                    }
+                    if (this.minY > y) {
+                        this.minY = y;
+                    }
+                    if (this.maxY < y) {
+                        this.maxY = y;
+                    }
+                }
+            }
+            addPoint(x, y) {
+                let d = 0;
+                let lPo = this.points.length;
+                if (lPo > 0) {
+                    let i = this.points[lPo - 1];
+                    if (x === i[0] && y === i[1]) {
+                        return;
+                    }
+                    d = Math.sqrt(sumSqr(x - i[0],y - i[1]));
+                    if (d < 0.001) {
+                        return;
+                    }
+                }
+
+                if (d > rad) {
+                    const nParts = d / rad;
+                    const lp = this.points[lPo - 1];
+                    for (let iPart = 1; iPart < nParts - 1; iPart++) {
+                        const t = iPart /nParts;
+                        const j = [x * t + lp[0] * (1 - t), y * t + lp[1] * (1 - t)];
+                        this.addPointActual(j[0], j[1]);
+                        this.calcCrossings();
+                    }
+                }
+                this.addPointActual(x, y);
+                this.calcCrossings();
+            }
+            whichConnection(x, y) {
+                console.log(`in which x = ${x} y = ${y}`)
+                this.crossings.forEach((c, ic) => console.log(`${ic} -> ${c.x}, ${c.y}`));
+
+                return this.crossings.findIndex(c => c.isInside(x, y));
+            }
+            invertConnections() {
+                this.crossings.forEach(c => c.invert());
+                this.countCrossings();
+            }
+            setConnectionInFocus(iCon) {
+                console.log(`setConnectionInFocus ${iCon}`);
+                this.conFocus = iCon;
+            }
+            setFocusConType(type) {
+                if (this.conFocus >= 0 && this.conFocus < this.crossings.length) {
+                    this.crossings[this.conFocus].type = type;
+                }
+            }
+            calcIntersect(index1, index2) {
+                let ps = this.points;
+                let [p0_x, p0_y] = [ps[index1][0], ps[index1][1]];
+                let [p1_x, p1_y] = [ps[index1 + 1][0], ps[index1 + 1][1]];
+                let [p2_x, p2_y] = [ps[index2][0], ps[index2][1]];
+                let [p3_x, p3_y] = [ps[index2 + 1][0], ps[index2 + 1][1]];
+                let s1_x = p1_x - p0_x;
+                let s1_y = p1_y - p0_y;
+                let s2_x = p3_x - p2_x;
+                let s2_y = p3_y - p2_y;
+
+                let s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
+                let t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
+
+                if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+                    let x = p0_x + (t * s1_x);
+                    let y = p0_y + (t * s1_y);
+                    return[x, y];
+                }
+                return null;
+            }
+
+            makeConnect() {
+                let lPo = this.points.length;
+                if (lPo === 0) {
+                    return;
+                }
+                this.minX = this.points[0][0];
+                this.maxX = this.points[0][0];
+                this.minY = this.points[0][1];
+                this.maxY = this.points[0][1];
+                this.points.forEach(p => {
+                    if (this.minX > p[0]) {
+                        this.minX = p[0];
+                    }
+                    if (this.maxX < p[0]) {
+                        this.maxX = p[0];
+                    }
+                    if (this.minY > p[1]) {
+                        this.minY = p[1];
+                    }
+                    if (this.maxY < p[1]) {
+                        this.maxY = p[1];
+                    }
+
+                })
+                if (calcDist2(this.points[0], this.points[lPo - 1]) > 0.5) {
+                    this.points.push(this.points[0]);
+                }
+                this.crossings.forEach(c => {
+                    c.finalize(this.points);
+                });
+
+                // register the transitions between connections
+                this.crossings.forEach(c => {
+                    c.pNear.forEach((nr, inr) => {
+                        const ep = c.pc[inr][2]
+                        if (nr[0] < 0) {
+                            const st = 1 - ((inr % 2));
+                            let bestScore = lPo;
+                            this.crossings.forEach((cn, icn) => {
+                                [st, st + 2].forEach(t => {
+                                    let dist = ((st === 1 ? (ep - cn.pc[t][2]) : (cn.pc[t][2] - ep)) + lPo) % lPo;
+                                    if (dist > 0 && bestScore > dist) {
+                                        bestScore = dist;
+                                        nr[0] = icn;
+                                        nr[1] = t;
+                                        nr[2] = - 1; // color
+                                    }
+                                });
+                            });
+                        }
+                    });
+                });
+            }
+            calcCrossings() {
+                if (this.points.length > 2) {
+                    let l = this.points.length;
+                    let lastEdge = [this.points[l - 2], this.points[l - 1]];
+                    this.points.forEach((p, ip, ap) => {
+                        if ((ip < ap.length - 3) &&
+                            isCrossing(lastEdge, [p, ap[ip + 1]])
+                        ) {
+                            let intersect =this.calcIntersect(l - 2, ip)
+                            if (intersect) {
+                                this.crossings.push(new Crossing(...intersect, 1));
+                            }
+                        }
+                    });
+                }
+            }
+            countCrossings() {
+                this.nPositiveCross = this.crossings.filter(cr => cr.type === 1).length;
+            }
+            actOnCrossing(x, y) {
+                this.crossings.forEach(c => c.action(x, y));
+                this.countCrossings();
+            }
+            drawKnot(ctx, tr, opt = {}) {
+                if (this.points.length <= 0) {
+                    return;
+                }
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(...tPoint(this.points[0], tr));
+                this.points.forEach(p => ctx.lineTo(...tPoint(p, tr)));
+                ctx.stroke();
+
+                this.crossings.forEach((c, ic) => c.drawCrossing(ctx, this.points, tr,
+                    {...opt, typeOverride: opt.types ? opt.types[ic] : null }));
+            }
+            getLoopsCount(types) {
+                this.nLoops = 0;
+                this.crossings.forEach(c => c.pNear.forEach(n => { n[2] = -1; }));
+                this.crossings.forEach((c, ic, ac) =>  {
+                    let type = typeByOpt(c.type, {typeOverride: types[ic]});
+                    let lines = linesByType(type);
+                    [0, 1, 2, 3].forEach(iN => {
+                        if (c.pNear[iN][2] < 0) {
+                            c.pNear[iN][2] = this.nLoops;
+                            let nc = c.pNear[nearInLine(lines, iN)];
+                            nc[2] = this.nLoops;
+                            type = typeByOpt(ac[nc[0]].type, {typeOverride: types[nc[0]]});
+                            lines = linesByType(type);
+                            while (ac[nc[0]].pNear[nc[1]][2] < 0) {
+                                ac[nc[0]].pNear[nc[1]][2] = this.nLoops;
+                                nc = ac[nc[0]].pNear[nearInLine(lines, nc[1])];
+                                nc[2] = this.nLoops;
+                                type = typeByOpt(ac[nc[0]].type, {typeOverride: types[nc[0]]});
+                                lines = linesByType(type);
+                            }
+                            this.nLoops += 1;
+                        }
+                    })
+                })
+                return this.nLoops;
+            }
+        }
+        let mainKnot = new Knot();
+        let storageKnots = [];
+        let mouseStatus = [0, 0, 0];
+        let mouseLastPoint = [0, 0];
+
+        let mode = - 1;
+
+        function clearAll(clearKnot) {
+            if (clearKnot) {
+                mainKnot.clear();
+            }
+            gblTrans.sx = 0;
+            gblTrans.sy = 0;
+            gblTrans.z = 1.0;
+            refreshMain();
+        }
+
+        function setMode(newMode) {
+            if (mode === newMode) {
+                return;
+            }
+            mode = newMode;
+            /*
+            const x = document.getElementsByClassName('mode');
+            for (let i = 0; i < x.length; i++) {
+                x.item(i).classList.remove("modeSelect");
+            }
+            document.getElementById(`mode${mode}`).classList.add("modeSelect");
+            */
+        }
+
+        function makeZoom(z) {
+            gblTrans = {...gblTrans, z: gblTrans.z * z}
+            refreshMain();
+        }
+
+        function calcDist2(p1, p2) {
+            return sumSqr(p1[0] - p2[0], p1[1] - p2[1])
+        }
+
+        function refreshMain() {
+            const ctx = document.getElementById('canvas').getContext('2d');
+
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, 1000, 500);
+
+            mainKnot.drawKnot(ctx, gblTrans, {})
+        }
+        function getSeg(p1, p2) {
+            return (p2[0] - p1[0]) * (p2[1] + p1[1]);
+        }
+        function getArea(p1, p2, p3, p4) {
+            return Math.abs(getSeg(p1, p2) + getSeg(p2, p3) + getSeg(p3, p4) + getSeg(p4, p1));
+        }
+        function getSign(p1, p2, p3) {
+            return 0 < (getSeg(p1, p2) + getSeg(p2, p3) + getSeg(p3, p1));
+        }
+        function isCrossing(e1, e2) {
+            return 0.1 < getArea(e1[0], e2[0], e1[1], e2[1]) &&
+                ((getSign(e1[0], e1[1], e2[0]) !== getSign(e1[0], e1[1], e2[1])) &&
+                (getSign(e2[0], e2[1], e1[0]) !== getSign(e2[0], e2[1], e1[1])))
+        }
+
+        function addPoint(px, py) {
+            mainKnot.addPoint(...tPointInv([px, py], gblTrans));
+            refreshMain();
+        }
+        function actOnCrossing(px, py) {
+            mainKnot.actOnCrossing(...tPointInv([px, py], gblTrans));
+            refreshMain();
+        }
+
+        function miniKnotDiv(str, nLoops, k) {
+            return `<div class="miniKnot1"><canvas class="smallCanvas" id="cn_${str}" width="140" height="120">`
+                + `</canvas><div>${str} R${nLoops.toString()} K${k}</div></div>`
+        }
+        function calcComplexes(k, nv, jp) {
+            const jonesPolynomial = new Polynomial(100);
+            let combo = Array.from({length: k},((v, iv) => iv));
+            let combos = [];
+            do {
+                combos.push([...combo]);
+            } while (nextCombo(combo, k, nv));
+            let strJoin = combos.map(comb => {
+                let str = Array.from({length: nv}).map(() => 'A');
+                comb.forEach(v => str[v] = 'B')
+                return str.join('');
+            });
+
+            const nPos = mainKnot.nPositiveCross;
+            const nNeg = mainKnot.crossings.length - nPos;
+            const rc = strJoin.map((str) => {
+                const nLoops = mainKnot.getLoopsCount(str);
+                const k = [...str].filter(c => c === 'B').length;
+                jonesPolynomial.add(Polynomial.buildPower(nLoops).shift(nPos - 2 * nNeg + k), ((k + nNeg) % 2) === 1 ? - 1: 1);
+                return miniKnotDiv(str, nLoops, k);
+            }).join('') + `<div>${jonesPolynomial.toHtml()}</div>`;
+
+            jp.add(jonesPolynomial);
+
+            return rc;
+        }
+        function makeComplexChain() {
+            const jonesPolynomial = new Polynomial(100);
+            const nCross = mainKnot.crossings.length;
+            document.getElementById('complexChain').innerHTML =
+                Array.from({length: nCross + 1},((v, iv) => iv))
+                    .map(iv => `<div class="miniKnot">${calcComplexes(iv, nCross, jonesPolynomial)}</div>`).join('');
+            document.getElementById('jonesPolynomial').innerHTML =
+                `JONES POLYNOMIAL</br>`
+                + `Unnormalized : ${jonesPolynomial.toHtml()}</br> `
+                + `Normalized: ${jonesPolynomial.jNorm().toHtml()}</br> `
+                + `Final:     ${jonesPolynomial.jNorm().shrink().toHtml("t")}` ;
+
+            const width = 140;
+            const height = 120;
+            const zoom = 0.9 * Math.min(width / (mainKnot.maxX - mainKnot.minX), height / (mainKnot.maxY - mainKnot.minY));
+            const sx = (- 0.5 * (mainKnot.maxX + mainKnot.minX) + width / 2) * zoom;
+            const sy = (- 0.5 * (mainKnot.maxY + mainKnot.minY) + height / 2) * zoom;
+            let tr = {...gblTrans, sx : sx, sy: sy, z: zoom, w: width, h: height};
+            Array.from(document.getElementsByClassName('smallCanvas')).forEach(el => {
+                const ctx = el.getContext('2d');
+                mainKnot.drawKnot(ctx, tr, {types: el.id.split('_')[1]});
+            });
+        }
+        function mDown(event) {
+            closeContext();
+            const box = event.target.getBoundingClientRect();
+            if (mainKnot.points.length > 0) {
+                setMode(0);
+            } else {
+                setMode(1);
+            }
+            switch (mode) {
+                case 0: // view
+                case 1: // draw
+                    mouseLastPoint = [event.clientX, event.clientY];
+                    mouseStatus[event.button] = 1;
+                    break;
+                case 2: // crossings
+                case 3: // divide
+                    actOnCrossing(event.clientX - box.left, event.clientY - box.top);
+                    break;
+            }
+            event.stopPropagation()
+        }
+        function mUp(event) {
+            mouseStatus[event.button] = 0;
+            switch (mode) {
+                case 0: // view
+                    break;
+                case 1: // draw
+                    mainKnot?.makeConnect();
+                    mainKnot?.countCrossings();
+                    refreshMain();
+                    break;
+            }
+            event.preventDefault();
+        }
+        function mMove(event) {
+            switch (mode) {
+                case 0: // view
+                    if (mouseStatus[0] === 1) {
+                        gblTrans.sx += event.clientX - mouseLastPoint[0];
+                        gblTrans.sy += event.clientY - mouseLastPoint[1];
+                        mouseLastPoint = [event.clientX, event.clientY];
+                        refreshMain();
+                    }
+                    break;
+                case 1: // draw
+                    if (mouseStatus[0] === 1) {
+                        const box = event.target.getBoundingClientRect();
+                        addPoint(event.clientX - box.left, event.clientY - box.top);
+                    }
+                    break;
+            }
+            event.preventDefault();
+        }
+        function mWheel(event) {
+            closeContext();
+            let z = event.deltaY < 0
+                ? Math.max(- 0.3, event.deltaY / 100)
+                : Math.min(0.3, event.deltaY / 100);
+            makeZoom(1 + z);
+            event.preventDefault();
+        }
+        const mContext = (event) => {
+            console.log(event);
+            const canvasRect = document.getElementById('canvas').getBoundingClientRect();
+            event.preventDefault();
+            const conIndex = mainKnot.whichConnection(...tPointInv([event.clientX - canvasRect.left, event.clientY - canvasRect.top], gblTrans));
+            let cm = null;
+            if (conIndex < 0) {
+                const pp = tPointInv([event.clientX - canvasRect.left, event.clientY - canvasRect.top], gblTrans)
+                //alert(`bo\n ${event.clientX - canvasRect.left}, ${event.clientY - canvasRect.top}\n${pp[0]} ${pp[1]}`);
+                cm = document.getElementById('contextMenu1');
+            } else {
+                mainKnot.setConnectionInFocus(conIndex)
+                cm = document.getElementById('contextMenu2');
+            }
+            cm.style.left = `${event.clientX + canvasRect.left}px`;
+            cm.style.top = `${event.clientY}px`;
+            cm.style.visibility = "visible";
+            return false;
+        }
+        function changeConnection(type) {
+            mainKnot.setFocusConType(type);
+            mainKnot.countCrossings();
+            refreshMain();
+        }
+        function invertConnections() {
+            mainKnot.invertConnections();
+            refreshMain();
+        }
+        function closeContext() {
+            document.getElementById('contextMenu1').style.visibility = "hidden";
+            document.getElementById('contextMenu2').style.visibility = "hidden";
+        }
+        function changeKnotName(iKnot) {
+            currentKnotIndex = iKnot;
+            document.getElementById('enterNameFrame').style.visibility = "visible";
+            document.getElementById('enterName').value = "";
+            if (storageKnots[currentKnotIndex].name.length > 0) {
+                document.getElementById('enterName').placeholder = storageKnots[currentKnotIndex].name;
+            } else {
+                document.getElementById('enterName').placeholder = "Enter new name";
+            }
+        }
+        function saveKnotName() {
+            storageKnots[currentKnotIndex].name = document.getElementById('enterName').value.trim();
+            storeAllKnots();
+            displayAllKnots();
+            document.getElementById('enterNameFrame').style.visibility = "hidden";
+        }
+        function cancelKnotName() {
+            document.getElementById('enterNameFrame').style.visibility = "hidden";
+        }
+        function displayAllKnots() {
+            document.getElementById('storageKnots').innerHTML =
+                storageKnots.map((k, ik) =>
+                    `<div class="cnStorage" >`
+                    + `<div onclick="uploadKnot(${ik})">`
+                    + `<canvas id="canvasStorage${ik.toString()}" width="140" height="120"/></div>`
+                    + `<span class="dname" onclick="changeKnotName(${ik})">${k.name}</span>`
+                    + `</div>`
+                )
+                    .join('');
+            storageKnots.map((k, ik) => {
+                let canvas = document.getElementById(`canvasStorage${ik.toString()}`);
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#f0f0f0';
+                ctx.fillRect(0, 0, 140, 120);
+                const width = 140;
+                const height = 120;
+                const zoom = 0.9 * Math.min(width / (k.maxX - k.minX), height / (k.maxY - k.minY));
+                const sx = (-0.5 * (k.maxX + k.minX) + width / 2) * zoom;
+                const sy = (-0.5 * (k.maxY + k.minY) + height / 2) * zoom;
+                let tr = {sx: sx, sy: sy, z: zoom, w: width, h: height};
+                k.drawKnot(ctx, tr);
+            });
+        }
+
+        function loadKnotsFromStorage() {
+            const knotsStr = localStorage.getItem('knots');
+            if (knotsStr) {
+                storageKnots = knotsStr.split('@').map(Knot.deserialize);
+                displayAllKnots();
+            }
+        }
+        function storeAllKnots() {
+            let knotsStr = storageKnots.map(k => k.serialize()).join('@');
+            localStorage.setItem('knots', knotsStr);
+        }
+
+        function saveKnot() {
+            storageKnots.push(mainKnot);
+            storeAllKnots();
+            loadKnotsFromStorage();
+        }
+        function uploadKnot(i) {
+            if (storageKnots.length > i) {
+                mainKnot = storageKnots[i].copy();
+                mainKnot.makeConnect();
+                mainKnot.countCrossings();
+                refreshMain();
+            }
+        }
+
+        function dr() {
+            const canvas = document.getElementById('canvas');
+            canvas.addEventListener('wheel',mWheel);
+            canvas.addEventListener('mousedown', mDown);
+            canvas.addEventListener('mouseup', mUp);
+            canvas.addEventListener('mousemove', mMove);
+            canvas.addEventListener('contextmenu', mContext);
+            const x = document.getElementsByClassName('option');
+            for (let i = 0; i < x.length; i++) {
+                x.item(i).addEventListener('click', toggleOption);
+            }
+            setMode(1);
+            refreshMain();
+            loadKnotsFromStorage();
+        }
+    </script>
+</head>
+<body onload="dr()">
+
+<!--
+<div id="modes">
+    <div id="mode0" class="mode but" onclick="setMode(0)">View</div>
+    <div id="mode1" class="mode but" onclick="setMode(1)">Draw</div>
+    <div id="mode2" class="mode but" onclick="setMode(2)">Crossings</div>
+    <div id="mode3" class="mode but" onclick="setMode(3)">Divide</div>
+</div>
+-->
+
+<div id="options">
+    <div id="optHideCircles" class="but option">Hide circles</div>
+</div>
+    <div id="contextMenu1" class="contextMenu" onclick="closeContext();">
+        <div onclick="clearAll(true)" class="menuBut">Clear</div>
+        <div onclick="clearAll(false)" class="menuBut">Reset zoom/shift</div>
+        <div class="menuSeparator"></div>
+        <div onclick="invertConnections()" class="menuBut">Invert connections</div>
+        <div onclick="makeComplexChain()" class="menuBut">Calc Jones polynomial</div>
+        <div class="menuSeparator"></div>
+        <div onclick="saveKnot()" class="menuBut">Save knot</div>
+    </div>
+    <div id="contextMenu2" class="contextMenu" onclick="closeContext();">
+        <div onclick="changeConnection(1)" class="menuBut"><span style="color:red; font-size: 18px;">&#11096</span> Positive connection</div>
+        <div onclick="changeConnection(2)" class="menuBut"><span style="color:blue; font-size: 18px;">&#11096;</span> Negative connection</div>
+        <div class="menuSeparator"></div>
+        <div onclick="changeConnection(3)" class="menuBut"><span style="color:brown; font-size: 18px;">&#11096</span> 0 connection</div>
+        <div onclick="changeConnection(4)" class="menuBut"><span style="color:green; font-size: 18px;">&#11096</span> 1 connection</div>
+    </div>
+
+    <div style="display:flex;">
+        <canvas style="cursor:crossHair; border:1px solid blue;" width="1000" height="500" id="canvas"></canvas>
+        <div>
+            <div id="storageKnots"></div>
+            <div id="enterNameFrame" class="enterNameFrame">
+                <input type="text" id="enterName" class="enterName" placeholder="Enter new name">
+                <div onclick="saveKnotName()" class="but">Save</div>
+                <div onclick="cancelKnotName()" class="but">X</div>
+            </div>
+        </div>
+    </div>
+    <div id="jonesPolynomial"></div>
+    <div id="complexChain"></div>
+</body>
+</html>
